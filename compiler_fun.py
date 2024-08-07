@@ -77,10 +77,7 @@ class Compiler(compiler_tup.Compiler):
                 case Assign(target, value):
                     return Assign(target, transform_node(value))
                 case Call(func, args):
-                    if func == 'print' or func == 'input_int':
-                        return Call(func, args)
-                    else:
-                        return Call(FunRef(func.id, args.__len__()), [transform_node(arg) for arg in args])
+                    return Call(transform_node(func), [transform_node(arg) for arg in args])
                 case Name(name):
                     if name in function_types:
                         func_type = function_types[name]
@@ -117,16 +114,23 @@ class Compiler(compiler_tup.Compiler):
     # Expose Allocation
     ###########################################################################
 
+    def expose_stmt(self, s: stmt) -> stmt:
+        match s:
+            case FunctionDef(name, arguments_args, stmts, args, kwargs):
+                return FunctionDef(name, arguments_args, self.expose_stmt(stmts), args, kwargs)
+            case _:
+                return super().expose_stmt(s)
+
     def expose_allocation(self, p: Module) -> Module:
-        return Module([super().expose_stmt(fun) for fun in p.body])
+        type_check_Lfun.TypeCheckLfun().type_check(p)
+        return Module([self.expose_stmt(s) for s in p.body])
 
     ############################################################################
     # Remove Complex Operands
     ############################################################################
 
     def remove_complex_operands(self, p: Module) -> Module:
-        # YOUR CODE HERE
-        pass
+        return Module([super().remove_complex_operands(fun) for fun in p.body])
 
     ############################################################################
     # Explicate Control

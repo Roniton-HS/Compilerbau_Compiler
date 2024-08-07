@@ -12,10 +12,7 @@ def maps(f : Callable[[int], int,], v : int) -> int:
 def inc(x : int) -> int:
     return (x + 1)
     
-a = 3
-b = a + 4
 x = maps(inc, 41)
-print(x)
 """
 
 print("#Parse")
@@ -32,4 +29,8 @@ print(ast)
 
 print("#Expose Allocation")
 ast = compiler.expose_allocation(ast)
+print(ast)
+
+print("#Remove Complex Operants")
+
 print(ast)
