@@ -38,3 +38,7 @@ print(ast)
 print("#Explicate Control")
 ast = compiler.explicate_control(ast)
 print(ast)
+
+print("#Select Instructions")
+ast = compiler.select_instructions(ast)
+print(ast)

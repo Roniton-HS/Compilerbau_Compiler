@@ -221,7 +221,55 @@ class Compiler(compiler_tup.Compiler):
 
     def select_instructions(self, p: Module) -> X86Program:
         # YOUR CODE HERE
-        pass
+        #type_check_Cfun.TypeCheckCfun().type_check(p)
+        instructions = []
+        for func in p.body:
+            if isinstance(func, FunctionDef):
+                instructions.append(self.select_def(func))
+                self.select_instructions(func)
+            else: 
+                instructions.append(self.select_stmt(func))
+        return X86Program(instructions)
+
+    
+    def select_def(self, func: FunctionDef) -> list[instr]:
+        new_body = []
+        func_name = func.name
+        params = func.args
+
+        for i, param in enumerate(params):
+            value = param[0]
+            reg_name = self.get_param_register(i)
+            new_body.append(Instr("movq", [Reg(reg_name), value]))
+
+        new_body.append(self.transform_stmt(func.body))
+
+        new_function = FunctionDef(
+        name = func.name,
+        args = [],  # Parameterliste wird ersetzt durch leere Liste
+        body =  new_body,  # Neuer Funktionskörper
+        decorator_list = [],
+        returns = func.returns
+        )
+          
+        return new_function
+
+    
+    def transform_stmt(self, s: stmt) -> list[instr]:
+        instructions = []
+        for stmt in s:
+            instructions.append(self.select_stmt(stmt))
+        return instructions
+    
+    
+    def select_stmt(self, s: stmt) -> list[instr]:
+        match s:
+            case Return(e):
+                pass
+
+    def get_param_register(self, i: int) -> str:
+        param_registers = ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']
+        return param_registers[i] if i < len(param_registers) else None
 
     ###########################################################################
     # Uncover Live
