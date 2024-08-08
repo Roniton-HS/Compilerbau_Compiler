@@ -32,5 +32,9 @@ ast = compiler.expose_allocation(ast)
 print(ast)
 
 print("#Remove Complex Operants")
+ast = compiler.remove_complex_operands(ast)
+print(ast)
 
+print("#Explicate Control")
+ast = compiler.explicate_control(ast)
 print(ast)

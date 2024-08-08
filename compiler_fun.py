@@ -1,4 +1,6 @@
+from _ast import stmt
 from ast import *
+from typing import Dict, List, Any
 
 import compiler_tup
 from x86_ast import *
@@ -129,16 +131,73 @@ class Compiler(compiler_tup.Compiler):
     # Remove Complex Operands
     ############################################################################
 
-    def remove_complex_operands(self, p: Module) -> Module:
-        return Module([super().remove_complex_operands(fun) for fun in p.body])
+    def rco_exp(self, e: expr, need_atomic: bool):
+        temporaries: Temporaries = []
+
+        match e:
+            case FunRef(label, arity):
+                pass
+            case Call(func, args):
+                func, func_tmp = self.rco_exp(func, True)
+                args = [self.rco_exp(arg, True) for arg in args]
+                temporaries = func_tmp + [item for _, temps in args for item in temps]
+                e = Call(func, [arg for arg, _ in args])
+            case _:
+                return super().rco_exp(e, need_atomic)
+        if need_atomic:
+            tmp = Name(get_fresh_tmp())
+            temporaries.append((tmp, e))
+            e = tmp
+
+        return e, temporaries
+
+    def rco_stmt(self, s: stmt) -> list[stmt]:
+        temporaries: Temporaries = []
+
+        match s:
+            case Return(e):
+                e, temporaries = self.rco_exp(e, False)
+                s = Return(e)
+            case FunctionDef(name, params, body, dec, ret_type, comment):
+                body = [item for s in body for item in self.rco_stmt(s)]
+                s = FunctionDef(name, params, body, dec, ret_type, comment)
+            case _:
+                return super().rco_stmt(s)
+        return [Assign([tmp[0]], tmp[1]) for tmp in temporaries] + [s]
 
     ############################################################################
     # Explicate Control
     ############################################################################
 
     def explicate_control(self, p: Module):
-        # YOUR CODE HERE
-        pass
+        for fun in p.body:
+            if isinstance(fun, FunctionDef):
+                fun.body = self.explicate_def(fun.body, fun.name)
+        return p
+
+    def explicate_def(self, body: list[stmt], name) -> dict[str, list[Any]]:
+        basic_blocks = {}
+        cont = []
+
+        # iterate through statements in reversed order
+        for s in reversed(body):
+            cont = self.explicate_stmt(s, cont, basic_blocks)
+
+        # create start block
+        basic_blocks[name + 'start'] = cont
+
+        # add return to last blocks
+        for label, block in basic_blocks.items():
+            if not block or not (isinstance(block[-1], (Goto, If, Return))):
+                block.append(Return(Constant(0)))
+        return basic_blocks
+
+    def explicate_stmt(self, s: stmt, cont, basic_blocks) -> list[stmt]:
+        match s:
+            case Return(val):
+                return [Return(val)] + cont
+            case _:
+                return super().explicate_stmt(s, cont, basic_blocks)
 
     ############################################################################
     # Select Instructions
