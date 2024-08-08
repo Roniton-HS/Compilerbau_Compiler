@@ -181,23 +181,39 @@ class Compiler(compiler_tup.Compiler):
 
         # iterate through statements in reversed order
         for s in reversed(body):
-            cont = self.explicate_stmt(s, cont, basic_blocks)
+            if isinstance(s, Return):
+                cont = self.explicate_tail(s, cont, basic_blocks)
+            else:
+                cont = self.explicate_stmt(s, cont, basic_blocks)
 
         # create start block
         basic_blocks[name + 'start'] = cont
 
         # add return to last blocks
         for label, block in basic_blocks.items():
-            if not block or not (isinstance(block[-1], (Goto, If, Return))):
+            if not block or not (isinstance(block[-1], (Goto, If, Return, TailCall))):
                 block.append(Return(Constant(0)))
         return basic_blocks
 
-    def explicate_stmt(self, s: stmt, cont, basic_blocks) -> list[stmt]:
+    def explicate_tail(self, s: stmt, cont, basic_blocks) -> list[stmt]:
         match s:
-            case Return(val):
-                return [Return(val)] + cont
+            case Return(value):
+                return [self.explicate_tail_expr(value)] + cont
+
+            case If(test, thn, els):
+                return [If(test, self.explicate_tail(thn, cont, basic_blocks),
+                           self.explicate_tail(els, cont, basic_blocks))]
+
+    def explicate_tail_expr(self, e: expr):
+        match e:
+            case Call(func, args):
+                return TailCall(func, args)
+            case IfExp(test, thn, els):
+                return IfExp(test, self.explicate_tail_expr(thn), self.explicate_tail_expr(els))
+            case Begin(body, result):
+                return Begin(body, self.explicate_tail_expr(result))
             case _:
-                return super().explicate_stmt(s, cont, basic_blocks)
+                return Return(e)
 
     ############################################################################
     # Select Instructions

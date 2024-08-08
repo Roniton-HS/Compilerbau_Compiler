@@ -11,8 +11,8 @@ def maps(f : Callable[[int], int,], v : int) -> int:
     
 def inc(x : int) -> int:
     return (x + 1)
-    
-x = maps(inc, 41)
+
+x = maps
 """
 
 print("#Parse")
