@@ -221,7 +221,73 @@ class Compiler(compiler_tup.Compiler):
 
     def select_instructions(self, p: Module) -> X86Program:
         # YOUR CODE HERE
-        pass
+        # type_check_Cfun.TypeCheckCfun().type_check(p)
+
+        instructions = []
+        for func in p.body:
+            if isinstance(func, FunctionDef):
+                instructions.append(self.select_def(func))
+        return X86Program(instructions)
+
+    
+    def select_def(self, func: FunctionDef) -> list[instr]:
+        params = func.args
+        blocks: dict[str, list[Instr]] = {}
+
+        for block_key, block_stmts in func.body.items():
+            instructions = []
+            for stmt in block_stmts:
+                instructions += self.select_stmt(stmt, func.name)
+            blocks[block_key] = instructions
+
+        prelude = []
+        for i, param in enumerate(params):
+            value = param[0]
+            reg_name = self.get_param_register(i)
+            prelude.append(Instr("movq", [Reg(reg_name), value]))
+        blocks[func.name + 'start'] = prelude + blocks[func.name + 'start']
+
+        new_function = FunctionDef(
+        name = func.name,
+        args = [],  # Parameterliste wird ersetzt durch leere Liste
+        body =  blocks,  # Neuer Funktionskörper
+        decorator_list = [],
+        returns = func.returns
+        )  
+        return new_function
+    
+    def select_assign(self, s: stmt) -> list[instr]:
+        match s:
+            case Assign([lhs], Call(func, args)):
+                instrs = []
+                for i, arg in enumerate(args):
+                    reg_name = self.get_param_register(i)
+                    instrs.append(Instr("movq", [self.select_arg(arg), reg_name]))
+                instrs.append(IndirectCallq(func.id, len(args)))
+                instrs.append(Instr("movq", [Reg("rax"), self.select_arg(lhs)]))
+                return instrs
+            case Assign([lhs], FunRef(name, arity)):
+                return [Instr("leaq", [x86_ast.Global(name), self.select_arg(lhs)])]
+            case Assign([lhs], atm):
+                return [Instr("movq", [self.select_arg(atm), self.select_arg(lhs)])]
+            case _:
+                return super().select_assign(s)
+
+    
+    def select_stmt(self, s: stmt, func_name: str) -> list[instr]:
+        match s:
+            case Return(exp):
+                instrs = self.select_assign(Assign([Reg("rax")], exp))
+                instrs.append(Jump(func_name + "conclusion"))
+                return instrs
+            case TailCall(func, args):
+                return [(TailJump(func.id, len(args)))]
+            case _:
+                return super().select_stmt(s)
+
+    def get_param_register(self, i: int) -> str:
+        param_registers = ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']
+        return param_registers[i] if i < len(param_registers) else None
 
     ###########################################################################
     # Uncover Live
